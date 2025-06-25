@@ -35,20 +35,150 @@ file_browser = FileBrowser()
 @mcp.tool()
 def read_document(file_path: str, format: str = "auto") -> Dict[str, Any]:
     """
-    Read and extract content from various document formats.
+    Read and extract content from various document formats including PDF, Word, Excel, and CSV files.
     
     Args:
-        file_path: Path to the document file
-        format: Document format ('pdf', 'docx', 'xlsx', or 'auto' for auto-detection)
+        file_path: Path to the document file (supports relative and absolute paths)
+        format: Document format ('pdf', 'docx', 'doc', 'xlsx', 'xls', 'csv', or 'auto' for auto-detection)
     
     Returns:
-        Dictionary containing extracted content and metadata
+        Dictionary containing extracted content, metadata, and structure information
     """
     try:
-        return document_reader.read_document(file_path, format)
+        result = document_reader.read_document(file_path, format)
+        if result.get("success"):
+            # Add helpful summary for Claude Code
+            content = result.get("content", {})
+            result["summary"] = {
+                "file_type": content.get("type", "unknown"),
+                "readable_content": True,
+                "character_count": content.get("total_characters", 0),
+                "structure_info": _get_structure_summary(content)
+            }
+        return result
     except Exception as e:
         logger.error(f"Error reading document {file_path}: {e}")
-        return {"error": str(e), "file_path": file_path}
+        return {"error": str(e), "file_path": file_path, "success": False}
+
+
+def _get_structure_summary(content: Dict[str, Any]) -> str:
+    """Generate a helpful structure summary for the document."""
+    doc_type = content.get("type", "")
+    
+    if doc_type == "pdf":
+        return f"{content.get('total_pages', 0)} pages"
+    elif doc_type == "docx":
+        return f"{content.get('total_paragraphs', 0)} paragraphs, {content.get('total_tables', 0)} tables"
+    elif doc_type == "excel":
+        sheets = content.get("summary", {}).get("total_sheets", 0)
+        return f"{sheets} sheets"
+    elif doc_type == "csv":
+        summary = content.get("summary", {})
+        return f"{summary.get('rows', 0)} rows, {summary.get('columns', 0)} columns"
+    
+    return "document structure available"
+
+
+@mcp.tool()
+def read_pdf(file_path: str) -> Dict[str, Any]:
+    """
+    Specifically read PDF files and extract text content.
+    
+    Args:
+        file_path: Path to the PDF file
+    
+    Returns:
+        PDF content with page-by-page text extraction
+    """
+    try:
+        result = document_reader.read_document(file_path, "pdf")
+        if result.get("success"):
+            # Return formatted text content for easier reading
+            content = result["content"]
+            formatted_text = []
+            for page in content.get("pages", []):
+                formatted_text.append(f"=== Page {page['page_number']} ===")
+                formatted_text.append(page.get("text", ""))
+                formatted_text.append("")
+            
+            result["formatted_text"] = "\n".join(formatted_text)
+        return result
+    except Exception as e:
+        logger.error(f"Error reading PDF {file_path}: {e}")
+        return {"error": str(e), "file_path": file_path, "success": False}
+
+
+@mcp.tool()
+def read_word_document(file_path: str) -> Dict[str, Any]:
+    """
+    Specifically read Word documents (.docx, .doc) and extract content.
+    
+    Args:
+        file_path: Path to the Word document
+    
+    Returns:
+        Word document content with paragraphs and tables
+    """
+    try:
+        result = document_reader.read_document(file_path, "docx")
+        if result.get("success"):
+            # Format content for better readability
+            content = result["content"]
+            formatted_sections = []
+            
+            # Add paragraph content
+            if content.get("paragraphs"):
+                formatted_sections.append("=== Document Text ===")
+                for para in content["paragraphs"]:
+                    if para.get("text", "").strip():
+                        formatted_sections.append(para["text"])
+                formatted_sections.append("")
+            
+            # Add table content
+            if content.get("tables"):
+                formatted_sections.append("=== Tables ===")
+                for i, table in enumerate(content["tables"], 1):
+                    formatted_sections.append(f"Table {i} ({table['rows']} rows x {table['columns']} columns):")
+                    for row in table.get("data", []):
+                        formatted_sections.append(" | ".join(str(cell) for cell in row))
+                    formatted_sections.append("")
+            
+            result["formatted_content"] = "\n".join(formatted_sections)
+        return result
+    except Exception as e:
+        logger.error(f"Error reading Word document {file_path}: {e}")
+        return {"error": str(e), "file_path": file_path, "success": False}
+
+
+@mcp.tool()
+def read_excel_file(file_path: str, sheet_name: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Specifically read Excel files and extract data from worksheets.
+    
+    Args:
+        file_path: Path to the Excel file
+        sheet_name: Optional specific sheet name to read (reads all sheets if not specified)
+    
+    Returns:
+        Excel data with sheets, rows, and columns
+    """
+    try:
+        result = document_reader.read_document(file_path, "xlsx")
+        if result.get("success") and sheet_name:
+            # Filter to specific sheet if requested
+            content = result["content"]
+            sheets = content.get("sheets", [])
+            filtered_sheets = [sheet for sheet in sheets if sheet.get("sheet_name") == sheet_name]
+            if filtered_sheets:
+                content["sheets"] = filtered_sheets
+                result["content"] = content
+            else:
+                return {"error": f"Sheet '{sheet_name}' not found", "available_sheets": [s.get("sheet_name") for s in sheets]}
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error reading Excel file {file_path}: {e}")
+        return {"error": str(e), "file_path": file_path, "success": False}
 
 
 @mcp.tool()
@@ -245,12 +375,8 @@ def main():
     logger.info(f"Database path: {config.database_path}")
     logger.info(f"GitHub integration: {'enabled' if project_manager else 'disabled (no token)'}")
     
-    # Run the server
-    mcp.run(
-        host=config.server_host,
-        port=config.server_port,
-        transport="stdio"  # Use stdio transport for MCP
-    )
+    # Run the server with stdio transport for Claude Code integration
+    mcp.run()
 
 
 if __name__ == "__main__":

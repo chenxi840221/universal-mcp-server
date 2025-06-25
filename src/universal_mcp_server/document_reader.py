@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-import PyPDF2
+from pypdf import PdfReader
 from docx import Document
 import pandas as pd
 
@@ -91,7 +91,7 @@ class DocumentReader:
         }
         
         with open(file_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
+            pdf_reader = PdfReader(file)
             content["total_pages"] = len(pdf_reader.pages)
             
             all_text = []

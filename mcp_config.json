@@ -1,12 +1,13 @@
 {
   "mcpServers": {
-    "universal-mcp-server": {
+    "document-reader": {
       "command": "python",
       "args": ["-m", "src.universal_mcp_server.main"],
       "cwd": "/mnt/c/workspace/MCPTool",
       "env": {
         "PYTHONPATH": "/mnt/c/workspace/MCPTool"
-      }
+      },
+      "description": "Universal document reader for PDF, Word, Excel, and CSV files with database and file management capabilities"
     }
   }
 }
