@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "universal-mcp-server": {
+      "command": "python",
+      "args": ["-m", "src.universal_mcp_server.main"],
+      "cwd": "/mnt/c/workspace/MCPTool",
+      "env": {
+        "PYTHONPATH": "/mnt/c/workspace/MCPTool"
+      }
+    }
+  }
+}
